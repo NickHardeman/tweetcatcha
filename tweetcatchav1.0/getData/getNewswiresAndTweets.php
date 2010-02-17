@@ -10,7 +10,7 @@ $limit = 0;
 $offset = 0;
 $getTotal = 1;
 $date = "2009-11-18";
-$minTweets = 1;
+$minTweets = 50;
 
 if (isset($_GET['limit'])) $limit = $_GET['limit'];
 if (isset($_GET['offset'])) $offset = $_GET['offset'];
@@ -32,61 +32,78 @@ $limitString = '';
 if ($limit > 0) {
 	$limitString .= "LIMIT ".$offset.", ".$limit;
 }
-$result = mysql_query("SELECT * FROM newswire_tb WHERE (createdTime >= '".$date."' AND createdTime < '".$date."' + INTERVAL 24 HOUR) ORDER BY createdTime ASC ".$limitString);
-$totalNewsitems = 0;
 
+
+$result = mysql_query("SELECT newswire_tb.*, backtweets_db.tweet_id, backtweets_db.tweet_from_user_id, backtweets_db.tweet_from_user, backtweets_db.tweet_profile_image_url, backtweets_db.tweet_created_at, backtweets_db.tweet_text, backtweets_db.newswire_id
+				  FROM newswire_tb, backtweets_db WHERE backtweets_db.newswire_id=newswire_tb.id AND (newswire_tb.createdTime >= '".$date."' AND newswire_tb.createdTime < '".$date."' + INTERVAL 24 HOUR) ORDER BY newswire_tb.createdTime ASC ".$limitString );
+
+$newsNode;
+$tweetNode;
+$id = -10;
+$totalTweets = 0;
+$totalNewsitems = 0;
 while( $row = mysql_fetch_assoc( $result ) ) {
-	//echo $row['updatedTime'];
-	$newsNode = $doc->createElement('news_item');
-	//$root->appendChild( $newsNode );
-	appendNewsNodeItems( $newsNode, $row );
-	$tweetNode = $doc->createElement('tweets');
-	$newsNode->appendChild( $tweetNode );
-	$totalTweets = getTweets($row, $tweetNode);
+	//echo $row['id']." Headline: ".$row['headline']."  Tweet: ".$row['tweet_text'].'<br />';
 	
-	if ($totalTweets >= $minTweets) {
-		$root->appendChild( $newsNode );
-		$totalNewsitems += 1;
+	$totalTweets += 1;
+	if ($id != $row['id']) {
+		if ($id > -10) {
+			if ($totalTweets >= $minTweets) {
+				appendAttribute($doc, $newsNode, 'total', $totalTweets);
+				appendAttribute($doc, $tweetNode, 'total', $totalTweets);
+				$totalNewsitems  += 1;
+				$root->appendChild( $newsNode );
+			}
+		}
+		$id = $row['id'];
+		$totalTweets = 0;
+		$newsNode = $doc->createElement('news_item');
+		appendNewsNodeItems( $newsNode, $row );
+		$tweetNode = $doc->createElement('tweets');
+		$newsNode->appendChild( $tweetNode );
 	}
+	$newsitem_id = $row["id"];
+	$newsitem_time = strtotime($row['createdTime']);
+	
+	$tweet = addTweet($row, $tweetNode);
+	$tweetTime = strtotime($row['tweet_created_at']);
+	
+	$hours = floor( ($tweetTime - $newsitem_time ) / (60 * 60) );
+	$minutes = (($tweetTime - $newsitem_time ) / 60) % 60;
+	
+	appendAttribute($doc, $tweet, 'hourDiff', $hours);
+	appendAttribute($doc, $tweet, 'minDiff', $minutes);
+	
 }
 appendAttribute($doc, $root, 'totalNewsItems', strval($totalNewsitems) );
 echo $xml_string = $doc->saveXML();
 
-////////////////////////////////////////////////////////////////////////////////////
-
-function getTweets($newsitem, $parentNode) {
-	global $doc, $root, $minTweets;
-	$newsitem_id = $newsitem["id"];
-	$newsitem_time = strtotime($newsitem['createdTime']);
-	
-	$result = mysql_query("SELECT * FROM backtweets_db WHERE newswire_id=".$newsitem_id." ORDER BY tweet_id ASC");
-	
-	$totalTweets  = mysql_num_rows($result);
-		
-	if ($totalTweets >= $minTweets) {
-		appendAttribute($doc, $parentNode, 'total', $totalTweets);
-		while( $row = mysql_fetch_assoc( $result ) ) {
-			$tweet = addTweet($row, $parentNode);
-			$tweetTime = strtotime($row['tweet_created_at']);
-			
-			$hours = floor( ($tweetTime - $newsitem_time ) / (60 * 60) );
-			$minutes = (($tweetTime - $newsitem_time ) / 60) % 60;
-			
-			appendAttribute($doc, $tweet, 'hourDiff', $hours);
-			appendAttribute($doc, $tweet, 'minDiff', $minutes);
-		}
-	}
-	
-	return $totalTweets;
-}
 
 function addTweet($tweetitem, $parentNode) {
 	global $doc;
 	$entry = appendElement($doc, $parentNode, 'tweet');
-	foreach ($tweetitem as $key => $value) {
-		$node = appendElement($doc, $entry, $key);
-		appendTextNode($doc, $node, $value);
-	}
+	
+	$node = appendElement($doc, $entry, 'tweet_id');
+	appendTextNode($doc, $node, ($tweetitem['tweet_id']));
+	
+	$node = appendElement($doc, $entry, 'tweet_from_user_id');
+	appendTextNode($doc, $node, ($tweetitem['tweet_from_user_id']));
+	
+	$node = appendElement($doc, $entry, 'tweet_from_user');
+	appendTextNode($doc, $node, ($tweetitem['tweet_from_user']));
+	
+	$node = appendElement($doc, $entry, 'tweet_profile_image_url');
+	appendTextNode($doc, $node, ($tweetitem['tweet_profile_image_url']));
+	
+	$node = appendElement($doc, $entry, 'tweet_created_at');
+	appendTextNode($doc, $node, ($tweetitem['tweet_created_at']));
+	
+	$node = appendElement($doc, $entry, 'tweet_text');
+	appendTextNode($doc, $node, ($tweetitem['tweet_text']));
+	
+	$node = appendElement($doc, $entry, 'newswire_id');
+	appendTextNode($doc, $node, ($tweetitem['newswire_id']));
+	
 	return $entry;
 }
 
