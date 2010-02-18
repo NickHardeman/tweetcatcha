@@ -10,7 +10,7 @@ $limit = 0;
 $offset = 0;
 $getTotal = 1;
 $date = "2009-11-18";
-$minTweets = 50;
+$minTweets = 1;
 
 if (isset($_GET['limit'])) $limit = $_GET['limit'];
 if (isset($_GET['offset'])) $offset = $_GET['offset'];
@@ -30,7 +30,7 @@ $root = $doc->appendChild($root);
 
 $limitString = '';
 if ($limit > 0) {
-	$limitString .= "LIMIT ".$offset.", ".$limit;
+	//$limitString .= "LIMIT ".$offset.", ".$limit;
 }
 
 
@@ -55,12 +55,16 @@ while( $row = mysql_fetch_assoc( $result ) ) {
 				$root->appendChild( $newsNode );
 			}
 		}
+		if ($limit > 0 && $totalNewsitems > $limit) {
+			break;
+		}
 		$id = $row['id'];
 		$totalTweets = 0;
 		$newsNode = $doc->createElement('news_item');
 		appendNewsNodeItems( $newsNode, $row );
 		$tweetNode = $doc->createElement('tweets');
 		$newsNode->appendChild( $tweetNode );
+		
 	}
 	$newsitem_id = $row["id"];
 	$newsitem_time = strtotime($row['createdTime']);
